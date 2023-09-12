@@ -1,5 +1,5 @@
 # shiny_landscape_genomics
-My first attempt at building a shiny app
+My first attempt at building a shiny app :)
 
 
-Unzip plink executable before running
+Unzip plink executable before running!
