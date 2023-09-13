@@ -127,8 +127,7 @@ server <- function(input, output) {
        env_file <- input$env_file$datapath
 
        X <- read.table(env_file, h = TRUE, stringsAsFactors = FALSE)
-       X <- as.matrix(X[, c(4:14)])
-
+       X <- as.matrix(X[, c(4:ncol(X))])
 
        # You need to define 'K' before running this code
        K <- as.numeric(input$user_k)
@@ -164,8 +163,9 @@ lfmm.res(lfmm_res)
  pvalues$CHR <- map$V1
  pvalues$BP <- map$V4
 
-
-manh <- pvalues[, c(12:14, 1:11)]
+a <- ncol(X) + 1
+b <- a + 2
+manh <- pvalues[, c(a:b, 1:ncol(X))]
 
 #### PLOT SINGLE ####
 par(mfrow = c(4, 4), oma = c(1, 1, 1, 1), mar = c(4, 6, 3, 1), mgp = c(3, 1, 0))
