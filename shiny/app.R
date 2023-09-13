@@ -37,21 +37,27 @@ ui <- fluidPage(
    ),
 
 
+    fileInput(
+     inputId = "coo_file",
+     label = "Samples coordinates (ID,LON,LAT) (.txt)",
+     multiple = FALSE,
+     accept = NULL,
+     width = NULL,
+     buttonLabel = "Browse...",
+     placeholder = "No file selected",
+     capture = NULL
+    ),
+
+
    textInput(
     inputId = "user_k",
     label = "Number of latent factors (K)",
    ),
 
 
-   fileInput(
-    inputId = "coo_file",
-    label = "Samples coordinates (ID,LON,LAT) (.txt)",
-    multiple = FALSE,
-    accept = NULL,
-    width = NULL,
-    buttonLabel = "Browse...",
-    placeholder = "No file selected",
-    capture = NULL
+   textInput(
+    inputId = "FDR_cutoff",
+    label = "FDR cutoff",
    )
 
 
@@ -230,7 +236,7 @@ server <- function(input, output) {
   qvalues$SNP <- as.character(map$V2)
   qvalues$CHR <- map$V1
   qvalues$BP <- map$V4
-  qcut <- 0.01
+  qcut <- as.numeric(input$FDR_cutoff)
   source("fn-landgen1.R", echo = F, keep.source = TRUE)
   lfmm_res <- lfmm_qvalcut(qvalues = qvalues, cutoff = qcut)
   lfmm.res(lfmm_res)
