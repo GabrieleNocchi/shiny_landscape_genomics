@@ -19,3 +19,5 @@ Needs Plink PED/MAP file for genotypes and a geographic coordinates tab separate
 
 
 Have fun!
+
+I will add gradient forests to it, to look at changes in allele frequency or cumulative importance across an environmental gradient for the adaptive SNPs detected with LFMM, and finally  calculate genomic offset for 2070 and 2100 -- in progress
