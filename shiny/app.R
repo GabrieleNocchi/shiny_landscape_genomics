@@ -5,6 +5,7 @@ library(tools)
 library(scales)
 library(LEA)
 library(ggplot2)
+library(caret)
 
 ui <- fluidPage(
  titlePanel("LFMM analysis"),
@@ -37,17 +38,22 @@ ui <- fluidPage(
    ),
 
 
-    fileInput(
-     inputId = "coo_file",
-     label = "Samples coordinates (ID,LON,LAT) (.txt)",
-     multiple = FALSE,
-     accept = NULL,
-     width = NULL,
-     buttonLabel = "Browse...",
-     placeholder = "No file selected",
-     capture = NULL
-    ),
+   fileInput(
+    inputId = "coo_file",
+    label = "Samples coordinates (ID,LON,LAT) (.txt)",
+    multiple = FALSE,
+    accept = NULL,
+    width = NULL,
+    buttonLabel = "Browse...",
+    placeholder = "No file selected",
+    capture = NULL
+   ),
 
+
+   textInput(
+    inputId = "var_cor_cutoff",
+    label = "Correlation cutoff for environmental variables",
+   ),
 
    textInput(
     inputId = "user_k",
@@ -65,6 +71,8 @@ ui <- fluidPage(
   mainPanel(
    plotOutput(outputId = "snmf_plot"),
    downloadButton(outputId = "downloadSNMF", label = "Download SNMF Plot"),
+   plotOutput(outputId = "correlation"),
+   downloadButton(outputId = "downloadcorr", label = "Download Correlation Plot"),
    plotOutput(outputId = "manh_plot", height = 800),
    downloadButton(outputId = "downloadMANH", label = "Download Manhattan Plot"),
    downloadButton(outputId = "downloadTable", label = "Download Results") # Add this line
@@ -83,6 +91,8 @@ server <- function(input, output) {
  lfmm.res <- reactiveVal(NULL)
  obj_snmf <- reactiveVal(NULL)
  saved_manh <- reactiveVal(NULL)
+ corr_matrix_saved <- reactiveVal(NULL)
+
  options(shiny.maxRequestSize = 3000*1024^2)
 
  output$downloadSNMF <- downloadHandler(
@@ -137,15 +147,13 @@ server <- function(input, output) {
   },
   content = function(file) {
    req(lfmm.res())
+   for_plot <- length(unique(sort(lfmm.res()$ENV)))
+   for_plot <- round(ceiling(for_plot/3))
    req(saved_manh())
-   print(saved_manh)
-   print(lfmm.res)
    png(file)
-   par(mfrow = c(5, 4), oma = c(1, 1, 1, 1), mar = c(4, 6, 3, 1), mgp = c(3, 1, 0))
+   par(mfrow = c(for_plot, 4), oma = c(1, 1, 1, 1), mar = c(4, 6, 3, 1), mgp = c(3, 1, 0))
    for (i in 4:ncol(saved_manh())) {
     manh_i <- saved_manh()[, c(1:3, i)]
-    print(manh_i)
-    print(i)
     SNPs <- lfmm.res()$SNP[lfmm.res()$ENV == colnames(manh_i)[4]]
     colnames(manh_i)[4] <- "P"
     qqman::manhattan(
@@ -162,7 +170,40 @@ server <- function(input, output) {
   contentType = "image/png"
  )
 
+ output$downloadcorr <- downloadHandler(
+  filename = function() {
+   paste("corr_plot_", Sys.Date(), ".png", sep = "")
+  },
+  content = function(file) {
+   png(file)
+   corrplot::corrplot(
+    corr_matrix_saved(),
+    order = "original",
+    type = "upper", diag = T,
+    tl.cex = 0.4,
+    tl.col = c(rep("red", 11),
+    rep("blue",8)),
+    tl.srt=45, addCoef.col = "darkgray", addCoefasPercent = T
+   )
+   dev.off()
+  },
+  contentType = "image/png"
+ )
 
+ output$correlation <- renderPlot({
+  req(corr_matrix_saved())
+
+  corrplot::corrplot(
+   corr_matrix_saved(),
+   order = "original",
+   type = "upper", diag = T,
+   tl.cex = 0.4,
+   tl.col = c(rep("red", 11),
+   rep("blue",8)),
+   tl.srt=45, addCoef.col = "darkgray", addCoefasPercent = T
+  )
+
+ })
 
 
  output$manh_plot <- renderPlot({
@@ -209,6 +250,21 @@ server <- function(input, output) {
    )
   }
 
+  # Calculate correlation matrix
+  corr_matrix <- cor(env)
+  corr_matrix_saved(corr_matrix)
+  # Set a correlation threshold (e.g., 0.8)
+  threshold <- as.numeric(input$var_cor_cutoff)
+
+  # Find highly correlated columns
+  highly_correlated <- findCorrelation(corr_matrix, cutoff = threshold)
+
+  # Remove highly correlated columns from the dataframe
+  env <- env[,-highly_correlated]
+
+  for_par <- ncol(env)
+  for_par <- round(ceiling(for_par/4))
+
   #       X <- read.table(env_file, h = TRUE, stringsAsFactors = FALSE)
   X <- cbind(coo, env)
   X <- as.matrix(X[, c(4:ncol(X))])
@@ -252,7 +308,7 @@ server <- function(input, output) {
   manh <- pvalues[, c(a:b, 1:ncol(X))]
   saved_manh(manh)
   #### PLOT SINGLE ####
-  par(mfrow = c(5, 4), oma = c(1, 1, 1, 1), mar = c(4, 6, 3, 1), mgp = c(3, 1, 0))
+  par(mfrow = c(for_par, 4), oma = c(1, 1, 1, 1), mar = c(4, 6, 3, 1), mgp = c(3, 1, 0))
   for (i in 4:ncol(manh)) {
    manh_i <- manh[, c(1:3, i)]
    SNPs <- lfmm_res$SNP[lfmm_res$ENV == colnames(manh_i)[4]]
