@@ -3,12 +3,13 @@ library(lfmm)
 library(data.table)
 library(tools)
 library(scales)
+library(LEA)
 
 ui <- fluidPage(
-  titlePanel("LFMM analysis"),
-  sidebarLayout(
-    position = "left",
-    sidebarPanel(
+      titlePanel("LFMM analysis"),
+      sidebarLayout(
+      position = "left",
+      sidebarPanel(
 
 
       fileInput(
@@ -35,6 +36,13 @@ ui <- fluidPage(
       ),
 
 
+
+      textInput(
+        inputId = "user_k",
+        label = "Number of latent factors (K)",
+      ),
+
+
       fileInput(
         inputId = "env_file",
         label = "Environmental data (.txt)",
@@ -44,22 +52,11 @@ ui <- fluidPage(
         buttonLabel = "Browse...",
         placeholder = "No file selected",
         capture = NULL
-      ),
-
-
-      textInput(
-        inputId = "user_k",
-        label = "Number of latent factors (K)",
-      ),
-      textInput(
-        inputId = "base_name",
-        label = "MAP/PED prefix",
-      ),
-
+      )
 
     ),
-    mainPanel(
-      plotOutput(outputId = "manh_plot",  height=800),tableOutput(outputId = "lfmm_res_table")
+     mainPanel(
+        plotOutput(outputId = "snmf_plot"),plotOutput(outputId = "manh_plot",  height=800),tableOutput(outputId = "lfmm_res_table")
     )
   )
 )
@@ -70,63 +67,80 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
-lfmm.res <- reactiveVal(NULL)
-   options(shiny.maxRequestSize = 3000*1024^2)
+ lfmm.res <- reactiveVal(NULL)
+ options(shiny.maxRequestSize = 3000*1024^2)
+
+ output$snmf_plot <- renderPlot({
+
+      my_prefix <- basename(input$ped_file$name)
+      my_prefix <- tools::file_path_sans_ext(my_prefix)
+
+      ped <- input$ped_file$datapath
+      ped <- data.table::fread(ped, sep = "\t")
+      map <- input$map_file$datapath
+      map <- data.table::fread(map, sep = "\t")
+
+      # Build and execute the system command
+      system(paste(
+        "./plink.exe ",
+        " --file ", my_prefix,
+        " --recodeA --allow-extra-chr --out ", my_prefix,
+        sep = "")
+        )
+
+      Y <- data.table::fread(paste(my_prefix, ".raw", sep = ""), na.strings = "NA", header = T)
+      Y <- Y[, -c(1:6)]
+      fwrite(Y, paste(my_prefix, ".lfmm", sep = ""), col.names = F, row.names = F, sep = "\t", na = "9")
+      Y <- LEA::lfmm2geno(paste(my_prefix, ".lfmm",
+                                sep = ""))
+
+      # sNMF (sparse nonnegative matrix factorization)
+      obj.snmf <- LEA::snmf(Y, K = 1:10, entropy = T, ploidy = 2, project = "new")
+
+      # let’inspect the values of the cross-entropy criterion for each K:
+      plot(obj.snmf, pch = 16, col = "blue")
+
+})
+
 
    output$manh_plot <- renderPlot({
 
-
-   ped <- input$ped_file$datapath
-   ped <- data.table::fread(ped, sep = "\t")
-
-   # .map file
-   map <- input$map_file$datapath
-   map <- data.table::fread(map, sep = "\t")
-
-
+       my_prefix <- basename(input$ped_file$name)
+       my_prefix <- tools::file_path_sans_ext(my_prefix)
+       ped <- input$ped_file$datapath
+       ped <- data.table::fread(ped, sep = "\t")
+       map <- input$map_file$datapath
+       map <- data.table::fread(map, sep = "\t")
 
 
    # Build and execute the system command
    system(paste(
      "./plink.exe ",
-     " --file ", input$base_name,
-     " --recodeA --allow-extra-chr --out ", input$base_name,
+     " --file ", my_prefix,
+     " --recodeA --allow-extra-chr --out ", my_prefix,
      sep = "")
      )
 
-Y <- data.table::fread(paste(input$base_name, ".raw", sep = ""), na.strings = "NA", header = T)
-Y <- Y[, -c(1:6)]
-fwrite(Y, paste(input$base_name, ".lfmm", sep = ""), col.names = F, row.names = F, sep = "\t", na = "9")
+       Y <- data.table::fread(paste(my_prefix, ".lfmm",
+                                       sep = ""), header = F)
+
+       env_file <- input$env_file$datapath
+
+       X <- read.table(env_file, h = TRUE, stringsAsFactors = FALSE)
+       X <- as.matrix(X[, c(4:14)])
 
 
-Y <- data.table::fread(paste(input$base_name, ".lfmm",
-                             sep = ""), header = F)
+       # You need to define 'K' before running this code
+       K <- as.numeric(input$user_k)
 
+       mod.lfmm <- lfmm::lfmm_ridge(Y = Y, X = X, K = K)
+       pv <- lfmm::lfmm_test(Y = Y, X = X, lfmm = mod.lfmm, calibrate = "gif")
+       pvalues <- pv$calibrated.pvalue
 
-
-
-
-
-
-
-
-    env_file <- input$env_file$datapath
-
-    X <- read.table(env_file, h = TRUE, stringsAsFactors = FALSE)
-    X <- as.matrix(X[, c(4:14)])
-
-
-    # You need to define 'K' before running this code
-    K <- as.numeric(input$user_k)
-
-    mod.lfmm <- lfmm::lfmm_ridge(Y = Y, X = X, K = K)
-    pv <- lfmm::lfmm_test(Y = Y, X = X, lfmm = mod.lfmm, calibrate = "gif")
-    pvalues <- pv$calibrated.pvalue
-
-    my_qvalue <- function(x) {
-   q <- qvalue::qvalue(x)
-   q <- q$qvalues
-   return(q)
+       my_qvalue <- function(x) {
+       q <- qvalue::qvalue(x)
+       q <- q$qvalues
+       return(q)
  }
 
  qvalues <- apply(pvalues, 2, my_qvalue)
