@@ -17,5 +17,6 @@ Finally it allows to save final LFMM manhattan plot and as well as a table with 
 Unzip plink executable before running!
 Needs Plink PED/MAP file for genotypes and a geographic coordinates tab separated file with 3 columns and the following header:  ID  LON  LAT
 
+Still work in progress ...
 
 Have fun!
