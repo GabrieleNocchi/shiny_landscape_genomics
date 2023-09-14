@@ -6,6 +6,7 @@ library(scales)
 library(LEA)
 library(ggplot2)
 library(caret)
+library(gtools)
 
 ui <- fluidPage(
  titlePanel("LFMM analysis"),
@@ -74,8 +75,11 @@ ui <- fluidPage(
    plotOutput(outputId = "correlation"),
    downloadButton(outputId = "downloadcorr", label = "Download Correlation Plot"),
    plotOutput(outputId = "manh_plot", height = 800),
+
+
    downloadButton(outputId = "downloadMANH", label = "Download Manhattan Plot"),
    downloadButton(outputId = "downloadTable", label = "Download Results") # Add this line
+
   )
 
 
@@ -137,7 +141,6 @@ server <- function(input, output) {
   obj_snmf(obj.snmf)
   # let’inspect the values of the cross-entropy criterion for each K:
   plot(obj.snmf, pch = 16, col = "blue")
-
  })
 
  output$downloadMANH <- downloadHandler(
@@ -287,7 +290,7 @@ server <- function(input, output) {
 
 
   qvalues <- as.data.frame(qvalues)
-  mylabs <- unique(map$V1) # we need this to preserve the order, otherwise it will order alphabetically
+  mylabs <- unique(mixedsort(map$V1)) # we need this to preserve the order, otherwise it will order alphabetically
   map$V1 <- as.numeric(factor(map$V1, levels = mylabs))
   qvalues$SNP <- as.character(map$V2)
   qvalues$CHR <- map$V1
